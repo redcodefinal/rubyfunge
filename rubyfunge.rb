@@ -1,15 +1,15 @@
 #! /usr/bin/env ruby
 DEBUG = false
 class Rubyfunge
-  DIRECTIONS = [?>, ?v, ?<, ?^]
-  OPERATIONS = [?+, ?-, ?*, ?/, ?%]
-  MEM_INSTRUCTIONS = [174.chr, 175.chr, ??, ?", ?', ?(, ?)]
-  STORE_INSTRUCTIONS = [?:, ?[, ?], ?$]
-  OUTPUT_INSTRUCTIONS = [?,, ?., ?{, ?}]
-  INPUT_INSTRUCTIONS = [?~, ?&, ?;]
-  LOGICAL_CONTROL = [?`, ?!, ?|, ?_, 203.chr, 202.chr, 204.chr, 185.chr, 192.chr, 191.chr, 217.chr, 218.chr]
+  DIRECTIONS = [?>, ?v, ?<, ?^] #Tested
+  OPERATIONS = [?+, ?-, ?*, ?/, ?%] #Tested
+  MEM_INSTRUCTIONS = [?l, ?r, ??, ?", ?', ?(, ?)] #Tested
+  STORE_INSTRUCTIONS = [?:, ?[, ?], ?$] #Tested
+  OUTPUT_INSTRUCTIONS = [?,, ?., ?{, ?}] #Tested
+  INPUT_INSTRUCTIONS = [?~, ?&, ?;] #Tested
+  LOGICAL_CONTROL = [?`, ?!, ?|, ?_, 203.chr, 202.chr, 204.chr, 185.chr]
   THREAD_CONTROL = [?@, ?=, 197.chr, 193.chr, 194.chr, 195.chr, 180.chr]
-  INSTRUCTIONS = DIRECTIONS + OPERATIONS + MEM_INSTRUCTIONS + STORE_INSTRUCTIONS + OUTPUT_INSTRUCTIONS + INPUT_INSTRUCTIONS + FLOW_CONTROL + THREAD_CONTROL
+  INSTRUCTIONS = DIRECTIONS + OPERATIONS + MEM_INSTRUCTIONS + STORE_INSTRUCTIONS + OUTPUT_INSTRUCTIONS + INPUT_INSTRUCTIONS + LOGICAL_CONTROL + THREAD_CONTROL
 
   attr_accessor  :input, :output
   attr_reader :code, :threads, :original_input
@@ -26,13 +26,17 @@ class Rubyfunge
     @threads << RubyfungeThread.new(self)
   end
 
+  def main
+    @threads.first
+  end
+
   def run_one_instruction
-    @threads.each(&:run_one_instruction)
     @threads.delete_if { |t| t.ended? }
+    @threads.each(&:run_one_instruction)
   end
 
   def run
-    until @threads.all?(&:ended?)
+    until ended?
       run_one_instruction
     end
     @output
@@ -47,6 +51,10 @@ class Rubyfunge
 
   def fork(thread, direction)
     @threads << thread.fork(direction)
+  end
+
+  def ended?
+    @threads.length.zero?
   end
 end
 
@@ -70,36 +78,34 @@ class RubyfungeThread
 
   def fork(direction)
     forked = dup
-    forked.send "turn_#{direction.to_s}"
+    forked.send "turn_#{direction.to_s}".to_sym
     forked.move 1
     forked
   end
 
   def run_one_instruction
+    int = get_code
+
     #DIRECTIONS
-    if DIRECTIONS.include? get_code
-      @direction = get_code
-
-    #OPERATIONS
-    elsif OPERATIONS.include? get_code
-      store @stage_a.send(get_code.to_sym, @stage_b)
-
-    #MEM_INSTRUCTIONS
-    elsif get_code == 174.chr
-      if stage_b > 0
-        stage_b.times do
+    if Rubyfunge::DIRECTIONS.include? int
+      @direction = int
+    elsif Rubyfunge::OPERATIONS.include? int  #OPERATIONS
+      store stage_a.send(int.to_sym, stage_b).to_i
+    elsif int == ?l #MEM_INSTRUCTIONS
+      if get_value > 0
+        get_value.times do
           move_mem_position_left
         end
       end
-    elsif get_code == 175.chr
-      if stage_b > 0
-        stage_b.times do
+    elsif int == ?r
+      if get_value > 0
+        get_value.times do
           move_mem_position_right
         end
       end
-    elsif get_code == ??
+    elsif int == ??
       store stage_b
-    elsif get_code == ?"
+    elsif int == ?"
       restore = @memory_position
       loop do
         #move first
@@ -109,7 +115,7 @@ class RubyfungeThread
         move_mem_position_right
       end
       @memory_position = restore
-    elsif get_code == ?'
+    elsif int == ?'
       number = ''
       loop do
         #move first
@@ -118,56 +124,45 @@ class RubyfungeThread
         number << get_code
       end
       store number.to_i
-    elsif get_code == ?(
+    elsif int == ?(
       move_mem_position_left
-    elsif get_code == ?)
+    elsif int == ?)
       move_mem_position_right
-
-    #STORE_INSTRUCTIONS
-    elsif get_code == ?:
+    elsif int == ?: #STORE_INSTRUCTIONS
       stage_v(get_value)
-    elsif get_code == ?[
+    elsif int == ?[
       stage_v(get_value)
       move_mem_position_left
-    elsif get_code == ?]
+    elsif int == ?]
       stage_v(get_value)
       move_mem_position_right
-    elsif get_code == ?$
+    elsif int == ?$
       @stage.reverse!
-
-    #OUTPUT_INSTRUCTIONS
-    elsif get_code == ?.
-      @output << get_value
-
-    elsif get_code == ?,
-      @output << get_value.chr
-
-    elsif get_code == ?}
-      @output << get_value.chr
+    elsif int == ?.    #OUTPUT_INSTRUCTIONS
+      machine.output << get_value.to_s
+    elsif int == ?,
+      machine.output << get_value.chr
+    elsif int == ?}
+      machine.output << get_value.chr
       move_mem_position_right
-
-    elsif get_code == ?{
+    elsif int == ?{
       @output << get_value.chr
       move_mem_position_left
-
-    #INPUT_INSTRUCTIONS
-    elsif get_code == ?&
-      store @input.slice!(0).to_i unless @input.length == 0
-    elsif get_code == ?~
-      store @input.slice!(0).ord unless @input.length == 0
-    elsif get_code == ?;
-      store ((@input.length == 0) ? 1 : 0)
-
-    #LOGICAL_CONTROL
-    elsif get_code == ?!
+    elsif int == ?&    #INPUT_INSTRUCTIONS
+      store machine.input.slice!(0).to_i unless machine.input.length == 0
+    elsif int == ?~
+      store machine.input.slice!(0).ord unless machine.input.length == 0
+    elsif int == ?;
+      store ((machine.input.length == 0) ? 0 : 1)
+    elsif int == ?! #LOGICAL_CONTROL
       store ((stage_b <= 0) ? 1 : 0)
-    elsif get_code == ?`
+    elsif int == ?`
       store ((stage_a > stage_b) ? 1 : 0)
-    elsif get_code == ?|
+    elsif int == ?|
       @direction = ((get_value == 0) ? ?v : ?^)
-    elsif get_code == ?_
+    elsif int == ?_
       @direction = ((get_value == 0) ? ?> : ?<)
-    elsif get_code == 203.chr
+    elsif int == ?w
       if @direction == ?v
         turn_around
       elsif @direction == ?> && get_value > 0
@@ -177,7 +172,7 @@ class RubyfungeThread
       elsif @direction == ?^
         ((get_value <= 0) ? turn_left : turn_right)
       end
-    elsif get_code == 202.chr
+    elsif int == ?y
       if @direction == ?v
         ((get_value <= 0) ? turn_left : turn_right)
       elsif @direction == ?> && get_value <= 0
@@ -187,7 +182,7 @@ class RubyfungeThread
       elsif @direction == ?^
         turn_around
       end
-    elsif get_code == 204.chr
+    elsif int == ?x
       if @direction == ?v && get_value <= 0
         turn_left
       elsif @direction == ?>
@@ -197,7 +192,7 @@ class RubyfungeThread
       elsif @direction == ?^ && get_value > 0
         turn_right
       end
-    elsif get_code == 185.chr
+    elsif int == ?z
       if @direction == ?v && get_value > 0
         turn_right
       elsif @direction == ?>
@@ -207,52 +202,10 @@ class RubyfungeThread
       elsif @direction == ?^ && get_value <= 0
         turn_left
       end
-    elsif get_code == 192.chr
-      if @direction == ?v
-        turn_left
-      elsif @direction == ?>
-        turn_around
-      elsif @direction == ?<
-        turn_right
-      elsif @direction == ?^
-        turn_around
-      end
-    elsif get_code == 191.chr
-      if @direction == ?v
-        turn_around
-      elsif @direction == ?>
-        turn_right
-      elsif @direction == ?<
-        turn_around
-      elsif @direction == ?^
-        turn_left
-      end
-    elsif get_code == 217.chr
-      if @direction == ?v
-        turn_right
-      elsif @direction == ?>
-        turn_left
-      elsif @direction == ?<
-        turn_around
-      elsif @direction == ?^
-        turn_around
-      end
-    elsif get_code == 218.chr
-      if @direction == ?v
-        turn_around
-      elsif @direction == ?>
-        turn_around
-      elsif @direction == ?<
-        turn_left
-      elsif @direction == ?^
-        turn_right
-      end
-
-    #TREAD_CONTROL
-    elsif get_code == 197.chr
+    elsif int == ?t    #TREAD_CONTROL
       machine.fork(self, :right)
       machine.fork(self, :left)
-    elsif get_code == 193.chr
+    elsif int == ?i
       if @direction == ?^
         turn_around
       elsif @direction == ?>
@@ -263,7 +216,7 @@ class RubyfungeThread
         machine.fork(self, :left)
         turn_right
       end
-    elsif get_code == 194.chr
+    elsif int == ?T
       if @direction == ?^
         machine.fork(self, :left)
         turn_right
@@ -274,7 +227,7 @@ class RubyfungeThread
       elsif @direction == ?v
         turn_around
       end
-    elsif get_code == 195.chr
+    elsif int == ?E
       if @direction == ?^
         machine.fork(self, :right)
       elsif @direction == ?>
@@ -285,7 +238,7 @@ class RubyfungeThread
       elsif @direction == ?v
         machine.fork(self, :left)
       end
-    elsif get_code == 180.chr
+    elsif int == ?q
       if @direction == ?^
         machine.fork(self, :left)
       elsif @direction == ?>
@@ -296,13 +249,11 @@ class RubyfungeThread
       elsif @direction == ?v
         machine.fork(self, :right)
       end
-
-    #NUMERALS
-    elsif (?0..?9).include? get_code
-      store get_code.to_i
+    elsif (?0..?9).include? int#NUMERALS
+      store int.to_i
     end
 
-    move((get_code == ?=) ? 2 : 1) unless get_code == ?@
+    move((int == ?=) ? 2 : 1) unless ended?
 
     @output
   end
@@ -313,11 +264,11 @@ class RubyfungeThread
   end
 
   def stage_a
-    stage[0]
+    stage.first
   end
 
   def stage_b
-    stage[0]
+    stage.last
   end
 
   def store(num)
@@ -359,7 +310,7 @@ class RubyfungeThread
 
   def move_mem_position_right
     @memory_position += 1
-    @memory << 0 if @memory_position > @memory.length
+    @memory << 0 if @memory_position >= @memory.length
   end
 
   def move_mem_position_left
