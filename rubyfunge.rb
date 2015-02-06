@@ -7,8 +7,8 @@ class Rubyfunge
   STORE_INSTRUCTIONS = [?:, ?[, ?], ?$] #Tested
   OUTPUT_INSTRUCTIONS = [?,, ?., ?{, ?}] #Tested
   INPUT_INSTRUCTIONS = [?~, ?&, ?;] #Tested
-  LOGICAL_CONTROL = [?`, ?!, ?|, ?_, 203.chr, 202.chr, 204.chr, 185.chr]
-  THREAD_CONTROL = [?@, ?=, 197.chr, 193.chr, 194.chr, 195.chr, 180.chr]
+  LOGICAL_CONTROL = [?`, ?!, ?|, ?_, ?w, ?x, ?y, ?z] #
+  THREAD_CONTROL = [?@, ?=, ?t, ?i, ?T, ?E, ?r]
   INSTRUCTIONS = DIRECTIONS + OPERATIONS + MEM_INSTRUCTIONS + STORE_INSTRUCTIONS + OUTPUT_INSTRUCTIONS + INPUT_INSTRUCTIONS + LOGICAL_CONTROL + THREAD_CONTROL
 
   attr_accessor  :input, :output
@@ -157,11 +157,11 @@ class RubyfungeThread
     elsif int == ?! #LOGICAL_CONTROL
       store ((stage_b <= 0) ? 1 : 0)
     elsif int == ?`
-      store ((stage_a > stage_b) ? 1 : 0)
+      store ((stage_a > stage_b) ? 0 : 1)
     elsif int == ?|
-      @direction = ((get_value == 0) ? ?v : ?^)
+      @direction = ((get_value <= 0) ? ?v : ?^)
     elsif int == ?_
-      @direction = ((get_value == 0) ? ?> : ?<)
+      @direction = ((get_value <= 0) ? ?> : ?<)
     elsif int == ?w
       if @direction == ?v
         turn_around
@@ -172,7 +172,7 @@ class RubyfungeThread
       elsif @direction == ?^
         ((get_value <= 0) ? turn_left : turn_right)
       end
-    elsif int == ?y
+    elsif int == ?x
       if @direction == ?v
         ((get_value <= 0) ? turn_left : turn_right)
       elsif @direction == ?> && get_value <= 0
@@ -182,7 +182,7 @@ class RubyfungeThread
       elsif @direction == ?^
         turn_around
       end
-    elsif int == ?x
+    elsif int == ?y
       if @direction == ?v && get_value <= 0
         turn_left
       elsif @direction == ?>
@@ -202,7 +202,7 @@ class RubyfungeThread
       elsif @direction == ?^ && get_value <= 0
         turn_left
       end
-    elsif int == ?t    #TREAD_CONTROL
+    elsif int == ?t    #THREAD_CONTROL
       machine.fork(self, :right)
       machine.fork(self, :left)
     elsif int == ?i
@@ -296,11 +296,11 @@ class RubyfungeThread
   end
 
   def turn_left
-    Rubyfunge::DIRECTIONS[(((Rubyfunge::DIRECTIONS.index(@direction) + 1) >= 4) ? 0 : Rubyfunge::DIRECTIONS.index(@direction))]
+    @direction = Rubyfunge::DIRECTIONS[(Rubyfunge::DIRECTIONS.index(@direction) - 1)]
   end
 
   def turn_right
-    Rubyfunge::DIRECTIONS[(Rubyfunge::DIRECTIONS.index(@direction) - 1)]
+    @direction =(((Rubyfunge::DIRECTIONS.index(@direction) + 1) == 4) ? Rubyfunge::DIRECTIONS[0] : Rubyfunge::DIRECTIONS[Rubyfunge::DIRECTIONS.index(@direction) + 1])
   end
 
   def turn_around
