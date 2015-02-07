@@ -17,11 +17,7 @@ RSpec.describe Rubyfunge do
   end
 
   it "should change directions (<>v^)" do
-    code = <<END
-v@<
-> ^
-END
-    r = Rubyfunge.new(code)
+    r = Rubyfunge.new("v@<\n> ^")
     expect(r.main.direction).to eq ?>
     r.run_one_instruction
     expect(r.main.direction).to eq ?v
@@ -200,15 +196,15 @@ END
 
   it "should store integer with (\')" do
     r = Rubyfunge.new %q{'123''4567'@}
-    r.run_one_instruction
+    5.times {r.run_one_instruction}
     expect(r.main.get_value).to eq 123
-    r.run_one_instruction
+    6.times {r.run_one_instruction}
     expect(r.main.get_value).to eq 4567
   end
 
   it "should store integer with (\")" do
     r = Rubyfunge.new %q{"Hello, world!"@}
-    r.run_one_instruction
+    15.times {r.run_one_instruction}
     expect(r.main.get_value).to eq ?H.ord
     expect(r.main.memory[1]).to eq ?e.ord
     expect(r.main.memory[2]).to eq ?l.ord
@@ -269,8 +265,8 @@ END
   end
 
   it "Should output character in memory with (,)" do
-    r = Rubyfunge.new %q{"Hello, World! ",),),),),),),),),),),),),)@}
-    r.run_one_instruction
+    r = Rubyfunge.new %q{"Hello, World!",),),),),),),),),),),),),)@}
+    15.times {r.run_one_instruction}
     r.run_one_instruction
     expect(r.output).to eq "H"
     r.run_one_instruction
@@ -312,8 +308,8 @@ END
   end
 
   it "should output character in memory and move with {}" do
-    r = Rubyfunge.new %q{"Hello, World! "\}\}\}\}\}\}\}\}\}\}\}\}\}@}
-    r.run_one_instruction
+    r = Rubyfunge.new %q{"Hello, World!"\}\}\}\}\}\}\}\}\}\}\}\}\}@}
+    15.times {r.run_one_instruction}
     r.run_one_instruction
     expect(r.output).to eq "H"
     r.run_one_instruction
@@ -401,7 +397,7 @@ END
     expect(r.main.get_value).to eq 1
     3.times {r.run_one_instruction}
     expect(r.main.get_value).to eq 0
-    3.times {r.run_one_instruction}
+    7.times {r.run_one_instruction}
     expect(r.main.get_value).to eq 1
     3.times {r.run_one_instruction}
     expect(r.main.get_value).to eq 0
@@ -713,7 +709,7 @@ END
   it "should produce a fibonacci sequence" do
     fibonacci =
         %q{8)1.]" ",1.]>+]" ",(.(([:$-w@} + "\n" +
-        %q{            ^   ?)$?(:]))  <} + "\n"
+        %q{            ^   ?)$?(:]))  <}
     r = Rubyfunge.new fibonacci
     r.run
     expect(r.output).to eq "1 1 2 3 5 8 13 21 34 55"

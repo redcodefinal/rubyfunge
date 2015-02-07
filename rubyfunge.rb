@@ -15,7 +15,12 @@ class Rubyfunge
   attr_reader :code, :threads, :original_input
   
   def initialize(code, input = "")
-    @code = code
+    @code = code.lines.map(&:chomp)
+    #get longest string length, pad all strings with zeros
+    longest = @code.map(&:length).sort.last
+    format = ("%-" + longest.to_s + "s")
+    @code.map!{|s| format % s}
+
 
     @input = input
     @original_input = input
@@ -66,7 +71,7 @@ class RubyfungeThread
 
   def initialize(machine)
     @machine = machine
-    @code = @machine.code.lines.map(&:chomp)
+    @code = @machine.code
     @code_position = Struct.new(:x, :y).new(0, 0)
     @stage = [0, 0]
 
@@ -74,6 +79,9 @@ class RubyfungeThread
     @memory_position = 0
 
     @direction = ?>
+
+    @string_mode = false
+    @integer_mode = false\
   end
 
   def fork(direction)
@@ -87,173 +95,181 @@ class RubyfungeThread
     int = get_code
 
     #DIRECTIONS
-    if Rubyfunge::DIRECTIONS.include? int
-      @direction = int
-    elsif Rubyfunge::OPERATIONS.include? int  #OPERATIONS
-      store stage_a.send(int.to_sym, stage_b).to_i
-    elsif int == ?l #MEM_INSTRUCTIONS
-      if get_value > 0
-        get_value.times do
-          move_mem_position_left
-        end
-      end
-    elsif int == ?r
-      if get_value > 0
-        get_value.times do
-          move_mem_position_right
-        end
-      end
-    elsif int == ??
-      store stage_b
-    elsif int == ?"
-      restore = @memory_position
-      loop do
-        #move first
-        move(1)
-        break if get_code == ?"
+    if @string_mode
+      if int != ?"
         store get_code.ord
         move_mem_position_right
-      end
-      @memory_position = restore
-    elsif int == ?'
-      number = ''
-      loop do
-        #move first
         move(1)
-        break if get_code == ?'
-        number << get_code
+      else
+        @string_mode = false
+        @memory_position = @restore
+        move(1)
       end
-      store number.to_i
-    elsif int == ?(
-      move_mem_position_left
-    elsif int == ?)
-      move_mem_position_right
-    elsif int == ?: #STORE_INSTRUCTIONS
-      stage_v(get_value)
-    elsif int == ?[
-      stage_v(get_value)
-      move_mem_position_left
-    elsif int == ?]
-      stage_v(get_value)
-      move_mem_position_right
-    elsif int == ?$
-      @stage.reverse!
-    elsif int == ?.    #OUTPUT_INSTRUCTIONS
-      machine.output << get_value.to_s
-    elsif int == ?,
-      machine.output << get_value.chr
-    elsif int == ?}
-      machine.output << get_value.chr
-      move_mem_position_right
-    elsif int == ?{
-      @output << get_value.chr
-      move_mem_position_left
-    elsif int == ?&    #INPUT_INSTRUCTIONS
-      store machine.input.slice!(0).to_i unless machine.input.length == 0
-    elsif int == ?~
-      store machine.input.slice!(0).ord unless machine.input.length == 0
-    elsif int == ?;
-      store ((machine.input.length == 0) ? 0 : 1)
-    elsif int == ?! #LOGICAL_CONTROL
-      store ((stage_b <= 0) ? 1 : 0)
-    elsif int == ?`
-      store ((stage_a > stage_b) ? 0 : 1)
-    elsif int == ?|
-      @direction = ((get_value <= 0) ? ?v : ?^)
-    elsif int == ?_
-      @direction = ((get_value <= 0) ? ?> : ?<)
-    elsif int == ?w
-      if @direction == ?v
-        turn_around
-      elsif @direction == ?> && get_value > 0
-        turn_right
-      elsif @direction == ?< && get_value <= 0
-        turn_left
-      elsif @direction == ?^
-        ((get_value <= 0) ? turn_left : turn_right)
+    elsif @integer_mode
+      if int != ?'
+        @number << int
+        move(1)
+      else
+        @integer_mode = false
+        move(1)
+        store @number.to_i
       end
-    elsif int == ?x
-      if @direction == ?v
-        ((get_value <= 0) ? turn_left : turn_right)
-      elsif @direction == ?> && get_value <= 0
-        turn_left
-      elsif @direction == ?< && get_value > 0
-        turn_right
-      elsif @direction == ?^
-        turn_around
-      end
-    elsif int == ?y
-      if @direction == ?v && get_value <= 0
-        turn_left
-      elsif @direction == ?>
-        turn_around
-      elsif @direction == ?<
-        ((get_value <= 0) ? turn_left : turn_right)
-      elsif @direction == ?^ && get_value > 0
-        turn_right
-      end
-    elsif int == ?z
-      if @direction == ?v && get_value > 0
-        turn_right
-      elsif @direction == ?>
-        ((get_value <= 0) ? turn_left : turn_right)
-      elsif @direction == ?<
-        turn_around
-      elsif @direction == ?^ && get_value <= 0
-        turn_left
-      end
-    elsif int == ?t    #THREAD_CONTROL
-      machine.fork(self, :right)
-      machine.fork(self, :left)
-    elsif int == ?i
-      if @direction == ?^
-        turn_around
-      elsif @direction == ?>
-        machine.fork(self, :left)
-      elsif @direction == ?<
+    else
+      if Rubyfunge::DIRECTIONS.include? int
+        @direction = int
+      elsif Rubyfunge::OPERATIONS.include? int  #OPERATIONS
+        store stage_a.send(int.to_sym, stage_b).to_i
+      elsif int == ?l #MEM_INSTRUCTIONS
+        if get_value > 0
+          get_value.times do
+            move_mem_position_left
+          end
+        end
+      elsif int == ?r
+        if get_value > 0
+          get_value.times do
+            move_mem_position_right
+          end
+        end
+      elsif int == ??
+        store stage_b
+      elsif int == ?"
+        @restore = @memory_position
+        @string_mode = true
+      elsif int == ?'
+        @number = ''
+        @integer_mode = true
+      elsif int == ?(
+        move_mem_position_left
+      elsif int == ?)
+        move_mem_position_right
+      elsif int == ?: #STORE_INSTRUCTIONS
+        stage_v(get_value)
+      elsif int == ?[
+        stage_v(get_value)
+        move_mem_position_left
+      elsif int == ?]
+        stage_v(get_value)
+        move_mem_position_right
+      elsif int == ?$
+        @stage.reverse!
+      elsif int == ?.    #OUTPUT_INSTRUCTIONS
+        machine.output << get_value.to_s
+      elsif int == ?,
+        machine.output << get_value.chr
+      elsif int == ?}
+        machine.output << get_value.chr
+        move_mem_position_right
+      elsif int == ?{
+        @output << get_value.chr
+        move_mem_position_left
+      elsif int == ?&    #INPUT_INSTRUCTIONS
+        store machine.input.slice!(0).to_i unless machine.input.length == 0
+      elsif int == ?~
+        store machine.input.slice!(0).ord unless machine.input.length == 0
+      elsif int == ?;
+        store ((machine.input.length == 0) ? 0 : 1)
+      elsif int == ?! #LOGICAL_CONTROL
+        store ((stage_b <= 0) ? 1 : 0)
+      elsif int == ?`
+        store ((stage_a > stage_b) ? 0 : 1)
+      elsif int == ?|
+        @direction = ((get_value <= 0) ? ?v : ?^)
+      elsif int == ?_
+        @direction = ((get_value <= 0) ? ?> : ?<)
+      elsif int == ?w
+        if @direction == ?v
+          turn_around
+        elsif @direction == ?> && get_value > 0
+          turn_right
+        elsif @direction == ?< && get_value <= 0
+          turn_left
+        elsif @direction == ?^
+          ((get_value <= 0) ? turn_left : turn_right)
+        end
+      elsif int == ?x
+        if @direction == ?v
+          ((get_value <= 0) ? turn_left : turn_right)
+        elsif @direction == ?> && get_value <= 0
+          turn_left
+        elsif @direction == ?< && get_value > 0
+          turn_right
+        elsif @direction == ?^
+          turn_around
+        end
+      elsif int == ?y
+        if @direction == ?v && get_value <= 0
+          turn_left
+        elsif @direction == ?>
+          turn_around
+        elsif @direction == ?<
+          ((get_value <= 0) ? turn_left : turn_right)
+        elsif @direction == ?^ && get_value > 0
+          turn_right
+        end
+      elsif int == ?z
+        if @direction == ?v && get_value > 0
+          turn_right
+        elsif @direction == ?>
+          ((get_value <= 0) ? turn_left : turn_right)
+        elsif @direction == ?<
+          turn_around
+        elsif @direction == ?^ && get_value <= 0
+          turn_left
+        end
+      elsif int == ?t    #THREAD_CONTROL
         machine.fork(self, :right)
-      elsif @direction == ?v
         machine.fork(self, :left)
-        turn_right
+      elsif int == ?i
+        if @direction == ?^
+          turn_around
+        elsif @direction == ?>
+          machine.fork(self, :left)
+        elsif @direction == ?<
+          machine.fork(self, :right)
+        elsif @direction == ?v
+          machine.fork(self, :left)
+          turn_right
+        end
+      elsif int == ?T
+        if @direction == ?^
+          machine.fork(self, :left)
+          turn_right
+        elsif @direction == ?>
+          machine.fork(self, :right)
+        elsif @direction == ?<
+          machine.fork(self, :left)
+        elsif @direction == ?v
+          turn_around
+        end
+      elsif int == ?E
+        if @direction == ?^
+          machine.fork(self, :right)
+        elsif @direction == ?>
+          turn_around
+        elsif @direction == ?<
+          machine.fork(self, :left)
+          turn_right
+        elsif @direction == ?v
+          machine.fork(self, :left)
+        end
+      elsif int == ?q
+        if @direction == ?^
+          machine.fork(self, :left)
+        elsif @direction == ?>
+          machine.fork(self, :left)
+          turn_right
+        elsif @direction == ?<
+          turn_around
+        elsif @direction == ?v
+          machine.fork(self, :right)
+        end
+      elsif (?0..?9).include? int#NUMERALS
+        store int.to_i
       end
-    elsif int == ?T
-      if @direction == ?^
-        machine.fork(self, :left)
-        turn_right
-      elsif @direction == ?>
-        machine.fork(self, :right)
-      elsif @direction == ?<
-        machine.fork(self, :left)
-      elsif @direction == ?v
-        turn_around
-      end
-    elsif int == ?E
-      if @direction == ?^
-        machine.fork(self, :right)
-      elsif @direction == ?>
-        turn_around
-      elsif @direction == ?<
-        machine.fork(self, :left)
-        turn_right
-      elsif @direction == ?v
-        machine.fork(self, :left)
-      end
-    elsif int == ?q
-      if @direction == ?^
-        machine.fork(self, :left)
-      elsif @direction == ?>
-        machine.fork(self, :left)
-        turn_right
-      elsif @direction == ?<
-        turn_around
-      elsif @direction == ?v
-        machine.fork(self, :right)
-      end
-    elsif (?0..?9).include? int#NUMERALS
-      store int.to_i
-    end
 
-    move((int == ?=) ? 2 : 1) unless ended?
+      move((int == ?=) ? 2 : 1) unless ended?
+    end
 
     @output
   end
