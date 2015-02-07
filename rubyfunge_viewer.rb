@@ -118,7 +118,7 @@ class RubyfungeViewer
     draw_code image, snapshots[frame]
     draw_code_position image, snapshots[frame]
     draw_hud image, snapshots[frame]
-    image.write("#{name}/#{name}-#{frame}.png")
+    image.write("#{name}/#{name}-#{('%05d' % frame)}.png")
   end
 
   def make_gif
