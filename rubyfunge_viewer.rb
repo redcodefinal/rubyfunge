@@ -125,8 +125,8 @@ class RubyfungeViewer
     snapshots.length.times do |frame|
       render_frame frame
     end
-    gif = ImageList.new(*Dir["#{name}/#{name}-*.png"])
-    gif.delay = 100
+    gif = ImageList.new(*Dir["#{name}/#{name}-*.png"].sort)
+    gif.delay = 70
     gif.write("#{name}/#{name}.gif")
   end
 end
